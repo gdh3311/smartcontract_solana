@@ -1,0 +1,313 @@
+{
+  "address": "3NEr6ZiHYsW6eP2w6tk84yoVdWsRiDyYoe5qxY6qrTKL",
+  "metadata": {
+    "name": "solana_contract",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "get_info",
+      "discriminator": [
+        142,
+        63,
+        131,
+        67,
+        226,
+        33,
+        250,
+        7
+      ],
+      "accounts": [
+        {
+          "name": "state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "signer": true
+        }
+      ],
+      "args": [],
+      "returns": {
+        "defined": {
+          "name": "StateInfo"
+        }
+      }
+    },
+    {
+      "name": "increment_counter",
+      "discriminator": [
+        16,
+        125,
+        2,
+        171,
+        73,
+        24,
+        207,
+        229
+      ],
+      "accounts": [
+        {
+          "name": "state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize",
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "set_message",
+      "discriminator": [
+        59,
+        44,
+        48,
+        192,
+        49,
+        29,
+        155,
+        85
+      ],
+      "accounts": [
+        {
+          "name": "state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "new_message",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "set_value",
+      "discriminator": [
+        253,
+        214,
+        48,
+        201,
+        100,
+        201,
+        227,
+        219
+      ],
+      "accounts": [
+        {
+          "name": "state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "new_value",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "StateAccount",
+      "discriminator": [
+        142,
+        247,
+        54,
+        95,
+        85,
+        133,
+        249,
+        103
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "MessageTooLong",
+      "msg": "Message is too long. Maximum 50 characters allowed."
+    },
+    {
+      "code": 6001,
+      "name": "CounterOverflow",
+      "msg": "Counter overflow occurred."
+    }
+  ],
+  "types": [
+    {
+      "name": "StateAccount",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "value",
+            "type": "u64"
+          },
+          {
+            "name": "message",
+            "type": "string"
+          },
+          {
+            "name": "counter",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "StateInfo",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "value",
+            "type": "u64"
+          },
+          {
+            "name": "message",
+            "type": "string"
+          },
+          {
+            "name": "counter",
+            "type": "u64"
+          },
+          {
+            "name": "total_interactions",
+            "type": "u64"
+          }
+        ]
+      }
+    }
+  ]
+}
