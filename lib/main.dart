@@ -67,7 +67,6 @@ class _MyHomePageState extends State<MyHomePage> {
       user = await Ed25519HDKeyPair.fromPrivateKeyBytes(
           privateKey: userKeyBytes.sublist(0, 32)
       );
-      print('Loaded user: ${user.address}');
 
       // PDA 주소를 변수에 저장
       stateAddress = await findStateAddress(user.publicKey);
