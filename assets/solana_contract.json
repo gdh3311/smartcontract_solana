@@ -8,124 +8,38 @@
   },
   "instructions": [
     {
-      "name": "get_info",
+      "name": "deposit",
       "discriminator": [
-        142,
-        63,
-        131,
-        67,
-        226,
-        33,
-        250,
-        7
+        242,
+        35,
+        198,
+        137,
+        82,
+        225,
+        242,
+        182
       ],
       "accounts": [
         {
-          "name": "state",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  116,
-                  97,
-                  116,
-                  101
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
-          "name": "user",
-          "signer": true
-        }
-      ],
-      "args": [],
-      "returns": {
-        "defined": {
-          "name": "StateInfo"
-        }
-      }
-    },
-    {
-      "name": "increment_counter",
-      "discriminator": [
-        16,
-        125,
-        2,
-        171,
-        73,
-        24,
-        207,
-        229
-      ],
-      "accounts": [
-        {
-          "name": "state",
+          "name": "balance_account",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  115,
-                  116,
+                  98,
                   97,
-                  116,
+                  108,
+                  97,
+                  110,
+                  99,
                   101
                 ]
               },
               {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
-          "name": "user",
-          "signer": true
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "initialize",
-      "discriminator": [
-        175,
-        175,
-        109,
-        31,
-        13,
-        152,
-        155,
-        237
-      ],
-      "accounts": [
-        {
-          "name": "state",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  116,
-                  97,
-                  116,
-                  101
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
+                "kind": "arg",
+                "path": "hash_key"
               }
             ]
           }
@@ -140,170 +54,117 @@
           "address": "11111111111111111111111111111111"
         }
       ],
-      "args": []
-    },
-    {
-      "name": "set_message",
-      "discriminator": [
-        59,
-        44,
-        48,
-        192,
-        49,
-        29,
-        155,
-        85
-      ],
-      "accounts": [
-        {
-          "name": "state",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  116,
-                  97,
-                  116,
-                  101
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
-          "name": "user",
-          "signer": true
-        }
-      ],
       "args": [
         {
-          "name": "new_message",
+          "name": "hash_key",
           "type": "string"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
         }
       ]
     },
     {
-      "name": "set_value",
+      "name": "withdraw",
       "discriminator": [
-        253,
-        214,
-        48,
-        201,
-        100,
-        201,
-        227,
-        219
+        183,
+        18,
+        70,
+        156,
+        148,
+        109,
+        161,
+        34
       ],
       "accounts": [
         {
-          "name": "state",
+          "name": "balance_account",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  115,
-                  116,
+                  98,
                   97,
-                  116,
+                  108,
+                  97,
+                  110,
+                  99,
                   101
                 ]
               },
               {
-                "kind": "account",
-                "path": "user"
+                "kind": "arg",
+                "path": "hash_key"
               }
             ]
           }
         },
         {
           "name": "user",
+          "writable": true,
           "signer": true
         }
       ],
       "args": [
         {
-          "name": "new_value",
-          "type": "u64"
+          "name": "hash_key",
+          "type": "string"
         }
       ]
     }
   ],
   "accounts": [
     {
-      "name": "StateAccount",
+      "name": "BalanceAccount",
       "discriminator": [
-        142,
-        247,
-        54,
-        95,
-        85,
-        133,
-        249,
-        103
+        44,
+        165,
+        195,
+        3,
+        17,
+        107,
+        110,
+        188
       ]
     }
   ],
   "errors": [
     {
       "code": 6000,
-      "name": "MessageTooLong",
-      "msg": "Message is too long. Maximum 50 characters allowed."
+      "name": "KeyTooLong",
+      "msg": "Key is too long. Maximum 32 bytes."
     },
     {
       "code": 6001,
-      "name": "CounterOverflow",
-      "msg": "Counter overflow occurred."
+      "name": "InvalidAmount",
+      "msg": "Invalid amount. Must be greater than 0."
+    },
+    {
+      "code": 6002,
+      "name": "InvalidKey",
+      "msg": "Invalid key."
+    },
+    {
+      "code": 6003,
+      "name": "NoBalance",
+      "msg": "No balance found."
     }
   ],
   "types": [
     {
-      "name": "StateAccount",
+      "name": "BalanceAccount",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "value",
-            "type": "u64"
-          },
-          {
-            "name": "message",
+            "name": "hash_key",
             "type": "string"
           },
           {
-            "name": "counter",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "StateInfo",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "value",
-            "type": "u64"
-          },
-          {
-            "name": "message",
-            "type": "string"
-          },
-          {
-            "name": "counter",
-            "type": "u64"
-          },
-          {
-            "name": "total_interactions",
+            "name": "balance",
             "type": "u64"
           }
         ]
