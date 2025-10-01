@@ -14,6 +14,7 @@ void main() {
 
 const programId = '3NEr6ZiHYsW6eP2w6tk84yoVdWsRiDyYoe5qxY6qrTKL';
 const userSecretKeyBase58 = 'Mxj2LkCF8bQuJx21btcxoqC4yBG7D7RuHP1We3weMYXMoumc2QcAhnLs71frdp4CKrhgHq5bc2zSj1hpRpJSMGP';
+const userSecretKey2Base58="3KQRrA6wna6UQPEGKVRaPPinh5DVDY4WCAVkpPhNRRC9XRR6JjvWagxXzQTzokjuhhqSfo4AvZ6UoUMoXZkzyaGn";
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -44,12 +45,12 @@ class _MyHomePageState extends State<MyHomePage> {
   late Ed25519HDKeyPair user;
   Map<String, dynamic>? idl;
   bool _isInitialized = false;
-
+  static const String adminAddress = "JAZZAQu3Nz6K2Mdy2y2pJmcWK7VNJW6Bhrwh2Fio1xPj";
   String _lastHashKey = "";
   int _myBalanceLamports = 0;
   int _mappingBalanceLamports = 0;
 
-  final TextEditingController _amountController = TextEditingController(text: "0.1"); // SOL 단위
+  final TextEditingController _amountController = TextEditingController(text: "0.1");
   final TextEditingController _withdrawHashController = TextEditingController();
 
   @override
@@ -69,7 +70,7 @@ class _MyHomePageState extends State<MyHomePage> {
     try {
       client = RpcClient('https://api.devnet.solana.com');
 
-      final userKeyBytes = base58.decode(userSecretKeyBase58);
+      final userKeyBytes = base58.decode(userSecretKey2Base58);
       user = await Ed25519HDKeyPair.fromPrivateKeyBytes(
           privateKey: userKeyBytes.sublist(0, 32)
       );
@@ -199,6 +200,58 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  // ✅ owner를 읽어오는 함수 추가
+  Future<String?> getOwnerFromBalanceAccount(String hashKey) async {
+    try {
+      final balanceAddress = await findBalanceAddress(hashKey);
+
+      final response = await http.post(
+        Uri.parse('https://api.devnet.solana.com'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "getAccountInfo",
+          "params": [
+            balanceAddress,
+            {"encoding": "base64", "commitment": "confirmed"}
+          ]
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (data['result']?['value']?['data'] != null) {
+        final dataArray = data['result']['value']['data'][0];
+        final dataBytes = base64.decode(dataArray);
+
+        if (dataBytes.length >= 8) {
+          int offset = 8;
+
+          // hash_key 건너뛰기
+          final keyLengthBuffer = ByteData.sublistView(dataBytes, offset, offset + 4);
+          final keyLength = keyLengthBuffer.getUint32(0, Endian.little);
+          offset += 4 + keyLength;
+
+          // balance 건너뛰기
+          offset += 8;
+
+          // ✅ owner 읽기 (Pubkey: 32 bytes)
+          if (dataBytes.length >= offset + 32) {
+            final ownerBytes = dataBytes.sublist(offset, offset + 32);
+            final ownerPubkey = base58.encode(ownerBytes);
+            print('Owner found: $ownerPubkey');
+            return ownerPubkey;
+          }
+        }
+      }
+      return null;
+    } catch (e) {
+      print('Get owner error: $e');
+      return null;
+    }
+  }
+
   Future<void> withdraw(String hashKey) async {
     try {
       if (hashKey.isEmpty) {
@@ -207,6 +260,7 @@ class _MyHomePageState extends State<MyHomePage> {
       }
 
       final balanceAddress = await findBalanceAddress(hashKey);
+
       final data = buildInstructionData('withdraw', hashKey: hashKey);
 
       final instruction = Instruction(
@@ -217,6 +271,11 @@ class _MyHomePageState extends State<MyHomePage> {
               isSigner: false
           ),
           AccountMeta.writeable(pubKey: user.publicKey, isSigner: true),
+          // ✅ Admin 계정 추가 (하드코딩)
+          AccountMeta.writeable(
+              pubKey: Ed25519HDPublicKey.fromBase58(adminAddress),
+              isSigner: false
+          ),
         ],
         data: ByteArray(data),
       );
@@ -224,7 +283,10 @@ class _MyHomePageState extends State<MyHomePage> {
       final message = Message(instructions: [instruction]);
       final signature = await client.signAndSendTransaction(message, [user]);
 
-      print('Withdraw tx: $signature');
+      print('✅ Withdraw tx: $signature');
+      print('✅ Deposit returned to user: ${user.publicKey.toBase58()}');
+      print('✅ Rent sent to admin: $adminAddress');
+
       await Future.delayed(Duration(seconds: 2));
 
       setState(() {
@@ -411,7 +473,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 SizedBox(height: 20),
 
                 Text(
-                  'Like EVM mapping(hash => uint): Enter hash key to access balance',
+                  'This Pre-Pre-Pre-Pre-Pre alpha Stage',
                   style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
                   textAlign: TextAlign.center,
                 ),
@@ -423,3 +485,5 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 }
+//3eafc1b70d3385a18f6b6dc2f97c8b64 0.1 sol
+//100d53ef7309361a61d491cea195fcb3
