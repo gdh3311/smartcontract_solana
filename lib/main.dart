@@ -11,11 +11,11 @@ import 'package:http/http.dart' as http;
 void main() {
   runApp(const MyApp());
 }
-
+// hkJegVqLUSSSh85QPZAvmWqC5FQFGK1teJxNjMqiWyDKf8bvhqiuSJhsjKuBVepS2nVqDJhHpsJT3Jb8wxzPinD
 const programId = '3NEr6ZiHYsW6eP2w6tk84yoVdWsRiDyYoe5qxY6qrTKL';
 const userSecretKeyBase58 = 'Mxj2LkCF8bQuJx21btcxoqC4yBG7D7RuHP1We3weMYXMoumc2QcAhnLs71frdp4CKrhgHq5bc2zSj1hpRpJSMGP';
 const userSecretKey2Base58="3KQRrA6wna6UQPEGKVRaPPinh5DVDY4WCAVkpPhNRRC9XRR6JjvWagxXzQTzokjuhhqSfo4AvZ6UoUMoXZkzyaGn";
-
+const adminSecretKeyBase58="hkJegVqLUSSSh85QPZAvmWqC5FQFGK1teJxNjMqiWyDKf8bvhqiuSJhsjKuBVepS2nVqDJhHpsJT3Jb8wxzPinD";
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -158,6 +158,10 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<void> deposit(double amountSol) async {
     try {
+      final adminKeyBytes = base58.decode(adminSecretKeyBase58);
+      final adminKeypair = await Ed25519HDKeyPair.fromPrivateKeyBytes(
+          privateKey: adminKeyBytes.sublist(0, 32)
+      );
       final amountLamports = (amountSol * 1e9).toInt();
       if (amountLamports <= 0) return;
 
@@ -169,24 +173,29 @@ class _MyHomePageState extends State<MyHomePage> {
       final instruction = Instruction(
         programId: Ed25519HDPublicKey.fromBase58(programId),
         accounts: [
+          // PDA balance account
           AccountMeta.writeable(
               pubKey: Ed25519HDPublicKey.fromBase58(balanceAddress),
-              isSigner: false
-          ),
+              isSigner: false),
+          // user (예치금 송금자)
           AccountMeta.writeable(pubKey: user.publicKey, isSigner: true),
+          // admin (rent payer) -> 반드시 signer로 설정
+          AccountMeta.writeable(
+              pubKey: Ed25519HDPublicKey.fromBase58(adminAddress),
+              isSigner: true),
+          // system_program
           AccountMeta.readonly(
               pubKey: Ed25519HDPublicKey.fromBase58('11111111111111111111111111111111'),
-              isSigner: false
-          ),
+              isSigner: false),
         ],
         data: ByteArray(data),
       );
 
       final message = Message(instructions: [instruction]);
-      final signature = await client.signAndSendTransaction(message, [user]);
+      final signature = await client.signAndSendTransaction(message, [user, adminKeypair]);
 
-      print('Deposit tx: $signature');
-      print('Generated Hash Key: $hashKey');
+      print('✅ Deposit tx: $signature');
+      print('🧩 Generated Hash Key: $hashKey');
 
       setState(() {
         _lastHashKey = hashKey;
@@ -199,6 +208,7 @@ class _MyHomePageState extends State<MyHomePage> {
       print('Deposit error: $e');
     }
   }
+
 
   // ✅ owner를 읽어오는 함수 추가
   Future<String?> getOwnerFromBalanceAccount(String hashKey) async {
@@ -258,7 +268,10 @@ class _MyHomePageState extends State<MyHomePage> {
         print('Hash key is empty');
         return;
       }
-
+      final adminKeyBytes = base58.decode(adminSecretKeyBase58);
+      final adminKeypair = await Ed25519HDKeyPair.fromPrivateKeyBytes(
+          privateKey: adminKeyBytes.sublist(0, 32)
+      );
       final balanceAddress = await findBalanceAddress(hashKey);
 
       final data = buildInstructionData('withdraw', hashKey: hashKey);
@@ -266,20 +279,28 @@ class _MyHomePageState extends State<MyHomePage> {
       final instruction = Instruction(
         programId: Ed25519HDPublicKey.fromBase58(programId),
         accounts: [
+          // PDA balance account
           AccountMeta.writeable(
               pubKey: Ed25519HDPublicKey.fromBase58(balanceAddress),
               isSigner: false
           ),
+          // user (출금자)
           AccountMeta.writeable(pubKey: user.publicKey, isSigner: true),
-          // ✅ Admin 계정 추가 (하드코딩)
+          // admin (rent 수령자)
           AccountMeta.writeable(
               pubKey: Ed25519HDPublicKey.fromBase58(adminAddress),
+              isSigner: false
+          ),
+          // system_program 추가
+          AccountMeta.readonly(
+              pubKey: Ed25519HDPublicKey.fromBase58(
+                  '11111111111111111111111111111111'),
               isSigner: false
           ),
         ],
         data: ByteArray(data),
       );
-
+      // 7f8a7ef50b43e003c806f7d299d63afa
       final message = Message(instructions: [instruction]);
       final signature = await client.signAndSendTransaction(message, [user]);
 
