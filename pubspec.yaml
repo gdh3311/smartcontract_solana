@@ -40,6 +40,7 @@ dependencies:
   convert: ^3.1.2
   bs58: ^1.0.2
   crypto: ^3.0.6
+  web3dart: ^2.6.1
 
 dev_dependencies:
   flutter_test:
@@ -59,7 +60,7 @@ dev_dependencies:
 flutter:
   assets:
     - assets/solana_contract.json
-
+    - assets/anonymous_pool.json
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.

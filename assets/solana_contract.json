@@ -50,11 +50,6 @@
           "signer": true
         },
         {
-          "name": "admin",
-          "writable": true,
-          "signer": true
-        },
-        {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
@@ -62,7 +57,12 @@
       "args": [
         {
           "name": "hash_key",
-          "type": "string"
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
         },
         {
           "name": "amount",
@@ -85,36 +85,12 @@
       "accounts": [
         {
           "name": "balance_account",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  98,
-                  97,
-                  108,
-                  97,
-                  110,
-                  99,
-                  101
-                ]
-              },
-              {
-                "kind": "arg",
-                "path": "hash_key"
-              }
-            ]
-          }
+          "writable": true
         },
         {
           "name": "user",
           "writable": true,
           "signer": true
-        },
-        {
-          "name": "admin",
-          "writable": true
         },
         {
           "name": "system_program",
@@ -123,8 +99,13 @@
       ],
       "args": [
         {
-          "name": "hash_key",
-          "type": "string"
+          "name": "h1",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
         }
       ]
     }
@@ -147,33 +128,18 @@
   "errors": [
     {
       "code": 6000,
-      "name": "KeyTooLong",
-      "msg": "Key is too long. Maximum 32 bytes."
-    },
-    {
-      "code": 6001,
       "name": "InvalidAmount",
       "msg": "Invalid amount. Must be greater than 0."
     },
     {
-      "code": 6002,
+      "code": 6001,
       "name": "InvalidKey",
-      "msg": "Invalid key."
+      "msg": "Invalid key — h1 does not match stored hash."
     },
     {
-      "code": 6003,
+      "code": 6002,
       "name": "NoBalance",
       "msg": "No balance found."
-    },
-    {
-      "code": 6004,
-      "name": "InvalidAdmin",
-      "msg": "Invalid admin address."
-    },
-    {
-      "code": 6005,
-      "name": "Overflow",
-      "msg": "Arithmetic overflow."
     }
   ],
   "types": [
@@ -184,11 +150,12 @@
         "fields": [
           {
             "name": "hash_key",
-            "type": "string"
-          },
-          {
-            "name": "balance",
-            "type": "u64"
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
           }
         ]
       }

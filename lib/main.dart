@@ -1,21 +1,27 @@
 import 'dart:convert';
 import 'dart:typed_data';
-import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:solana/encoder.dart';
+import 'package:solana/dto.dart' as dto;
 import 'package:solana/solana.dart';
 import 'package:bs58/bs58.dart';
 import 'package:http/http.dart' as http;
+import 'package:solanacontext/hashchain.dart';
 
 void main() {
   runApp(const MyApp());
 }
+
 // hkJegVqLUSSSh85QPZAvmWqC5FQFGK1teJxNjMqiWyDKf8bvhqiuSJhsjKuBVepS2nVqDJhHpsJT3Jb8wxzPinD
 const programId = '3NEr6ZiHYsW6eP2w6tk84yoVdWsRiDyYoe5qxY6qrTKL';
-const userSecretKeyBase58 = 'Mxj2LkCF8bQuJx21btcxoqC4yBG7D7RuHP1We3weMYXMoumc2QcAhnLs71frdp4CKrhgHq5bc2zSj1hpRpJSMGP';
-const userSecretKey2Base58="3KQRrA6wna6UQPEGKVRaPPinh5DVDY4WCAVkpPhNRRC9XRR6JjvWagxXzQTzokjuhhqSfo4AvZ6UoUMoXZkzyaGn";
-const adminSecretKeyBase58="hkJegVqLUSSSh85QPZAvmWqC5FQFGK1teJxNjMqiWyDKf8bvhqiuSJhsjKuBVepS2nVqDJhHpsJT3Jb8wxzPinD";
+const userSecretKeyBase58 =
+    'Mxj2LkCF8bQuJx21btcxoqC4yBG7D7RuHP1We3weMYXMoumc2QcAhnLs71frdp4CKrhgHq5bc2zSj1hpRpJSMGP';
+const userSecretKey2Base58 =
+    "3KQRrA6wna6UQPEGKVRaPPinh5DVDY4WCAVkpPhNRRC9XRR6JjvWagxXzQTzokjuhhqSfo4AvZ6UoUMoXZkzyaGn";
+const adminSecretKeyBase58 =
+    "hkJegVqLUSSSh85QPZAvmWqC5FQFGK1teJxNjMqiWyDKf8bvhqiuSJhsjKuBVepS2nVqDJhHpsJT3Jb8wxzPinD";
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -34,6 +40,7 @@ class MyApp extends StatelessWidget {
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key, required this.title});
+
   final String title;
 
   @override
@@ -45,12 +52,13 @@ class _MyHomePageState extends State<MyHomePage> {
   late Ed25519HDKeyPair user;
   Map<String, dynamic>? idl;
   bool _isInitialized = false;
-  static const String adminAddress = "JAZZAQu3Nz6K2Mdy2y2pJmcWK7VNJW6Bhrwh2Fio1xPj";
   String _lastHashKey = "";
   int _myBalanceLamports = 0;
-  int _mappingBalanceLamports = 0;
+  double _mappingBalanceLamports = 0;
+  bool _initialized = false;
 
-  final TextEditingController _amountController = TextEditingController(text: "0.1");
+  final TextEditingController _amountController =
+      TextEditingController(text: "0.1");
   final TextEditingController _withdrawHashController = TextEditingController();
 
   @override
@@ -72,13 +80,13 @@ class _MyHomePageState extends State<MyHomePage> {
 
       final userKeyBytes = base58.decode(userSecretKey2Base58);
       user = await Ed25519HDKeyPair.fromPrivateKeyBytes(
-          privateKey: userKeyBytes.sublist(0, 32)
-      );
+          privateKey: userKeyBytes.sublist(0, 32));
 
       print('User address: ${user.publicKey}');
       await getMyBalance();
 
-      final jsonString = await rootBundle.loadString('assets/solana_contract.json');
+      final jsonString =
+          await rootBundle.loadString('assets/anonymous_pool.json');
       idl = jsonDecode(jsonString);
 
       setState(() {
@@ -86,6 +94,58 @@ class _MyHomePageState extends State<MyHomePage> {
       });
     } catch (e) {
       print('Initialization error: $e');
+    }
+  }
+
+  Future<void> initializePool() async {
+    RpcClient server = RpcClient('https://api.devnet.solana.com');
+    final keyBytes = base58.decode(adminSecretKeyBase58);
+    Ed25519HDKeyPair admin = await Ed25519HDKeyPair.fromPrivateKeyBytes(
+        privateKey: keyBytes.sublist(0, 32));
+
+    final jsonString =
+        await rootBundle.loadString('assets/anonymous_pool.json');
+    idl = jsonDecode(jsonString);
+    setState(() {});
+    final poolAddress = await findPoolAddress();
+    final data = buildInstructionData('initialize');
+
+    final instruction = Instruction(
+      programId: Ed25519HDPublicKey.fromBase58(programId),
+      accounts: [
+        AccountMeta.writeable(
+            pubKey: Ed25519HDPublicKey.fromBase58(poolAddress),
+            isSigner: false),
+        AccountMeta.writeable(pubKey: admin.publicKey, isSigner: true),
+        AccountMeta.readonly(
+            pubKey: Ed25519HDPublicKey.fromBase58(
+                '11111111111111111111111111111111'),
+            isSigner: false),
+      ],
+      data: ByteArray(data),
+    );
+
+    final message = Message(instructions: [instruction]);
+    final signature = await server.signAndSendTransaction(message, [admin]);
+    setState(() {
+      _initialized = true;
+    });
+    print('✅ Pool initialized: $signature');
+  }
+
+  Future<bool> isPoolInitialized() async {
+    try {
+      final poolAddress = await findPoolAddress();
+      print("Pool address: $poolAddress");
+
+      final info = await client.getAccountInfo(
+        poolAddress,
+        encoding: dto.Encoding.base64,
+      );
+      return info.value != null && info.value!.data != null;
+    } catch (e) {
+      print("Pool not initialized or error: $e");
+      return false;
     }
   }
 
@@ -101,54 +161,48 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  String generateHashKey() {
-    final random = DateTime.now().microsecondsSinceEpoch.toString() +
-        user.publicKey.toString();
-    final bytes = utf8.encode(random);
-    final digest = sha256.convert(bytes);
-    return digest.toString().substring(0, 32);
-  }
-
-  Future<String> findBalanceAddress(String hashKey) async {
+  Future<String> findCommitmentAddress(Uint8List commitment) async {
     final seeds = [
-      utf8.encode("balance"),
-      utf8.encode(hashKey),
+      utf8.encode("commitment"),
+      commitment,
     ];
+
     final pda = await Ed25519HDPublicKey.findProgramAddress(
-        seeds: seeds,
-        programId: Ed25519HDPublicKey.fromBase58(programId)
+      seeds: seeds,
+      programId: Ed25519HDPublicKey.fromBase58(programId),
     );
     return pda.toBase58();
   }
 
-  Uint8List buildInstructionData(String methodName, {String? hashKey, int? amount}) {
-    final instruction = idl!['instructions'].firstWhere((ins) => ins['name'] == methodName);
+  Future<String> findPoolAddress() async {
+    final seeds = [utf8.encode("pool")];
+    final pda = await Ed25519HDPublicKey.findProgramAddress(
+      seeds: seeds,
+      programId: Ed25519HDPublicKey.fromBase58(programId),
+    );
+    return pda.toBase58();
+  }
+
+  Uint8List buildInstructionData(String methodName,
+      {Uint8List? hashKey, int? amount}) {
+    final instruction =
+        idl!['instructions'].firstWhere((ins) => ins['name'] == methodName);
     final discriminator = List<int>.from(instruction['discriminator']);
 
     Uint8List argsBytes = Uint8List(0);
 
     if (methodName == 'deposit' && hashKey != null && amount != null) {
-      final keyBytes = utf8.encode(hashKey);
-      final buffer = ByteData(4 + keyBytes.length + 8);
-
-      buffer.setUint32(0, keyBytes.length, Endian.little);
-      for (int i = 0; i < keyBytes.length; i++) {
-        buffer.setUint8(4 + i, keyBytes[i]);
+      final buffer = ByteData(32 + 8); // 32 bytes hash + 8 bytes amount
+      for (int i = 0; i < 32; i++) {
+        buffer.setUint8(i, hashKey[i]);
       }
-
-      final amountOffset = 4 + keyBytes.length;
-      final low32 = amount & 0xFFFFFFFF;
-      final high32 = (amount >> 32) & 0xFFFFFFFF;
-      buffer.setUint32(amountOffset, low32, Endian.little);
-      buffer.setUint32(amountOffset + 4, high32, Endian.little);
+      buffer.setUint64(32, amount, Endian.little);
 
       argsBytes = buffer.buffer.asUint8List();
     } else if (methodName == 'withdraw' && hashKey != null) {
-      final keyBytes = utf8.encode(hashKey);
-      final buffer = ByteData(4 + keyBytes.length);
-      buffer.setUint32(0, keyBytes.length, Endian.little);
-      for (int i = 0; i < keyBytes.length; i++) {
-        buffer.setUint8(4 + i, keyBytes[i]);
+      final buffer = ByteData(32);
+      for (int i = 0; i < 32; i++) {
+        buffer.setUint8(i, hashKey[i]);
       }
       argsBytes = buffer.buffer.asUint8List();
     }
@@ -157,173 +211,122 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Future<void> deposit(double amountSol) async {
-    try {
-      final adminKeyBytes = base58.decode(adminSecretKeyBase58);
-      final adminKeypair = await Ed25519HDKeyPair.fromPrivateKeyBytes(
-          privateKey: adminKeyBytes.sublist(0, 32)
-      );
-      final amountLamports = (amountSol * 1e9).toInt();
-      if (amountLamports <= 0) return;
+    final poolAddress = await findPoolAddress();
+    final hashChain = SolanaHashChain.createDepositChain(
+        userPublicKey: user.publicKey.toBase58());
+    final h1 = hashChain["depositHash"]!;
+    final h2 = hashChain["withdrawHash"]!;
+    final h2Bytes = base58.decode(h2);
+    final commitmentAddress = await findCommitmentAddress(h2Bytes);
 
-      final hashKey = generateHashKey();
-      final balanceAddress = await findBalanceAddress(hashKey);
+    final amountLamports = (amountSol * 1e9).toInt();
+    final data = buildInstructionData('deposit',
+        hashKey: h2Bytes, amount: amountLamports);
 
-      final data = buildInstructionData('deposit', hashKey: hashKey, amount: amountLamports);
+    final instruction = Instruction(
+      programId: Ed25519HDPublicKey.fromBase58(programId),
+      accounts: [
+        AccountMeta.writeable(
+            pubKey: Ed25519HDPublicKey.fromBase58(poolAddress),
+            isSigner: false),
+        AccountMeta.writeable(
+            pubKey: Ed25519HDPublicKey.fromBase58(commitmentAddress),
+            isSigner: false),
+        AccountMeta.writeable(pubKey: user.publicKey, isSigner: true),
+        AccountMeta.readonly(
+            pubKey: Ed25519HDPublicKey.fromBase58(
+                '11111111111111111111111111111111'),
+            isSigner: false),
+      ],
+      data: ByteArray(data),
+    );
 
-      final instruction = Instruction(
-        programId: Ed25519HDPublicKey.fromBase58(programId),
-        accounts: [
-          // PDA balance account
-          AccountMeta.writeable(
-              pubKey: Ed25519HDPublicKey.fromBase58(balanceAddress),
-              isSigner: false),
-          // user (예치금 송금자)
-          AccountMeta.writeable(pubKey: user.publicKey, isSigner: true),
-          // admin (rent payer) -> 반드시 signer로 설정
-          AccountMeta.writeable(
-              pubKey: Ed25519HDPublicKey.fromBase58(adminAddress),
-              isSigner: true),
-          // system_program
-          AccountMeta.readonly(
-              pubKey: Ed25519HDPublicKey.fromBase58('11111111111111111111111111111111'),
-              isSigner: false),
-        ],
-        data: ByteArray(data),
-      );
-
-      final message = Message(instructions: [instruction]);
-      final signature = await client.signAndSendTransaction(message, [user, adminKeypair]);
-
-      print('✅ Deposit tx: $signature');
-      print('🧩 Generated Hash Key: $hashKey');
-
-      setState(() {
-        _lastHashKey = hashKey;
-      });
-
-      await Future.delayed(Duration(seconds: 2));
-      await getMyBalance();
-      await checkBalance(hashKey);
-    } catch (e) {
-      print('Deposit error: $e');
-    }
+    final message = Message(instructions: [instruction]);
+    final signature = await client.signAndSendTransaction(message, [user]);
+    print('✅ Deposit Transaction: $signature');
+    print('🔹 Hash1 (Deposit Hash): $h1');
+    print('🔹 Hash2 (Withdraw Hash): $h2');
+    print('🔹 Commitment PDA: $commitmentAddress');
+    print('💰 Amount: $amountSol SOL (${amountLamports} lamports)');
   }
 
-
-  // ✅ owner를 읽어오는 함수 추가
-  Future<String?> getOwnerFromBalanceAccount(String hashKey) async {
+  Future<void> withdraw(String h1Base58) async {
     try {
-      final balanceAddress = await findBalanceAddress(hashKey);
+      // H1 → H2 변환
+      final h1Bytes = base58.decode(h1Base58);
+      final h2Base58 = SolanaHashChain.prepareWithdraw(h1Base58);
+      final h2Bytes = base58.decode(h2Base58);
 
-      final response = await http.post(
-        Uri.parse('https://api.devnet.solana.com'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          "jsonrpc": "2.0",
-          "id": 1,
-          "method": "getAccountInfo",
-          "params": [
-            balanceAddress,
-            {"encoding": "base64", "commitment": "confirmed"}
-          ]
-        }),
+      // PDA 조회
+      final poolPDA = await findPoolAddress();
+      final commitmentPDA = await findCommitmentAddress(h2Bytes);
+
+      final info = await client.getAccountInfo(
+        commitmentPDA,
+        encoding: dto.Encoding.base58,
       );
-
-      final data = jsonDecode(response.body);
-
-      if (data['result']?['value']?['data'] != null) {
-        final dataArray = data['result']['value']['data'][0];
-        final dataBytes = base64.decode(dataArray);
-
-        if (dataBytes.length >= 8) {
-          int offset = 8;
-
-          // hash_key 건너뛰기
-          final keyLengthBuffer = ByteData.sublistView(dataBytes, offset, offset + 4);
-          final keyLength = keyLengthBuffer.getUint32(0, Endian.little);
-          offset += 4 + keyLength;
-
-          // balance 건너뛰기
-          offset += 8;
-
-          // ✅ owner 읽기 (Pubkey: 32 bytes)
-          if (dataBytes.length >= offset + 32) {
-            final ownerBytes = dataBytes.sublist(offset, offset + 32);
-            final ownerPubkey = base58.encode(ownerBytes);
-            print('Owner found: $ownerPubkey');
-            return ownerPubkey;
-          }
-        }
-      }
-      return null;
-    } catch (e) {
-      print('Get owner error: $e');
-      return null;
-    }
-  }
-
-  Future<void> withdraw(String hashKey) async {
-    try {
-      if (hashKey.isEmpty) {
-        print('Hash key is empty');
+      if (info.value == null) {
+        print('Commitment not found!');
         return;
       }
-      final adminKeyBytes = base58.decode(adminSecretKeyBase58);
-      final adminKeypair = await Ed25519HDKeyPair.fromPrivateKeyBytes(
-          privateKey: adminKeyBytes.sublist(0, 32)
-      );
-      final balanceAddress = await findBalanceAddress(hashKey);
 
-      final data = buildInstructionData('withdraw', hashKey: hashKey);
+      // instruction 데이터 생성
+      final data = buildInstructionData('withdraw', hashKey: h1Bytes);
 
       final instruction = Instruction(
         programId: Ed25519HDPublicKey.fromBase58(programId),
         accounts: [
-          // PDA balance account
+          // 1. pool PDA
           AccountMeta.writeable(
-              pubKey: Ed25519HDPublicKey.fromBase58(balanceAddress),
-              isSigner: false
-          ),
-          // user (출금자)
+              pubKey: Ed25519HDPublicKey.fromBase58(poolPDA),
+              isSigner: false),
+
+          // 2. commitment_account PDA
+          AccountMeta.writeable(
+              pubKey: Ed25519HDPublicKey.fromBase58(commitmentPDA),
+              isSigner: false),
+
+          // 3. recipient (출금 받을 주소)
+          AccountMeta.writeable(
+              pubKey: user.publicKey,  // 또는 다른 수신 주소
+              isSigner: false),
+
+          // 4. user (서명자, lamports 지불)
           AccountMeta.writeable(pubKey: user.publicKey, isSigner: true),
-          // admin (rent 수령자)
-          AccountMeta.writeable(
-              pubKey: Ed25519HDPublicKey.fromBase58(adminAddress),
-              isSigner: false
-          ),
-          // system_program 추가
+
+          // 5. system_program
           AccountMeta.readonly(
               pubKey: Ed25519HDPublicKey.fromBase58(
                   '11111111111111111111111111111111'),
-              isSigner: false
-          ),
+              isSigner: false),
         ],
         data: ByteArray(data),
       );
-      // 7f8a7ef50b43e003c806f7d299d63afa
+
+      // 트랜잭션 전송
       final message = Message(instructions: [instruction]);
       final signature = await client.signAndSendTransaction(message, [user]);
 
-      print('✅ Withdraw tx: $signature');
-      print('✅ Deposit returned to user: ${user.publicKey.toBase58()}');
-      print('✅ Rent sent to admin: $adminAddress');
-
-      await Future.delayed(Duration(seconds: 2));
-
-      setState(() {
-        _mappingBalanceLamports = 0;
-      });
+      print('✅ Withdraw Transaction: $signature');
+      print('   H1: $h1Base58');
+      print('   H2: $h2Base58');
 
       await getMyBalance();
     } catch (e) {
-      print('Withdraw error: $e');
+      print('❌ Withdraw error: $e');
     }
+  }
+
+  Future<String> findNullifierAddress(Uint8List h1Bytes) async {
+    final programPubkey = Ed25519HDPublicKey.fromBase58(programId);
+    final seeds = [utf8.encode('nullifier'), h1Bytes];
+    final pda = await Ed25519HDPublicKey.findProgramAddress(
+        seeds: seeds, programId: programPubkey);
+    return pda.toBase58();
   }
 
   Future<void> checkBalance(String hashKey) async {
     try {
-      final balanceAddress = await findBalanceAddress(hashKey);
-
       final response = await http.post(
         Uri.parse('https://api.devnet.solana.com'),
         headers: {'Content-Type': 'application/json'},
@@ -332,49 +335,41 @@ class _MyHomePageState extends State<MyHomePage> {
           "id": 1,
           "method": "getAccountInfo",
           "params": [
-            balanceAddress,
+            hashKey,
             {"encoding": "base64", "commitment": "confirmed"}
           ]
         }),
       );
 
       final data = jsonDecode(response.body);
-
-      if (data['result']?['value']?['data'] != null) {
-        final dataArray = data['result']['value']['data'][0];
-        final dataBytes = base64.decode(dataArray);
-
-        if (dataBytes.length >= 8) {
-          int offset = 8;
-
-          final keyLengthBuffer = ByteData.sublistView(dataBytes, offset, offset + 4);
-          final keyLength = keyLengthBuffer.getUint32(0, Endian.little);
-          offset += 4;
-
-          final keyBytes = dataBytes.sublist(offset, offset + keyLength);
-          final storedKey = utf8.decode(keyBytes);
-          offset += keyLength;
-
-          final balanceBuffer = ByteData.sublistView(dataBytes, offset, offset + 8);
-          final balanceLow32 = balanceBuffer.getUint32(0, Endian.little);
-          final balanceHigh32 = balanceBuffer.getUint32(4, Endian.little);
-          final balance = balanceLow32 + (balanceHigh32 << 32);
-
-          setState(() {
-            _lastHashKey = storedKey;
-            _mappingBalanceLamports = balance;
-          });
-
-          print('Mapping - Key: "$storedKey", Balance: ${balance / 1e9} SOL');
-        }
-      } else {
+      print(data.toString());
+      final accountInfo = data['result']?['value'];
+      if (accountInfo == null) {
         print('No balance found for this key');
         setState(() {
           _mappingBalanceLamports = 0;
         });
+        return;
       }
+
+      final accountDataBase64 = accountInfo['data'][0];
+      final accountData = base64.decode(accountDataBase64);
+
+      final storedKey = accountData.sublist(0, 32);
+      final totalLamports = data['result']['value']['lamports'] as int;
+      final balanceSol = totalLamports / 1e9;
+      setState(() {
+        _lastHashKey = base58.encode(storedKey); // 화면 표시용
+        _mappingBalanceLamports = balanceSol;
+      });
+
+      print(
+          'Mapping - Key: ${base58.encode(storedKey)}, Balance: $balanceSol SOL');
     } catch (e) {
       print('Check balance error: $e');
+      setState(() {
+        _mappingBalanceLamports = 0;
+      });
     }
   }
 
@@ -399,33 +394,35 @@ class _MyHomePageState extends State<MyHomePage> {
                     padding: EdgeInsets.all(16),
                     child: Column(
                       children: [
-                        Text('My Wallet', style: Theme.of(context).textTheme.headlineSmall),
+                        Text('My Wallet',
+                            style: Theme.of(context).textTheme.headlineSmall),
                         SizedBox(height: 16),
-                        Text('Balance: ${(_myBalanceLamports / 1e9).toStringAsFixed(4)} SOL',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        Text(
+                            'Balance: ${(_myBalanceLamports / 1e9).toStringAsFixed(4)} SOL',
+                            style: TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ),
                 ),
-
                 SizedBox(height: 20),
-
                 Card(
                   child: Padding(
                     padding: EdgeInsets.all(16),
                     child: Column(
                       children: [
-                        Text('Mapping State', style: Theme.of(context).textTheme.headlineSmall),
+                        Text('Mapping State',
+                            style: Theme.of(context).textTheme.headlineSmall),
                         SizedBox(height: 16),
-                        Text('Last Key: ${_lastHashKey.isEmpty ? "None" : _lastHashKey}'),
-                        Text('Balance: ${(_mappingBalanceLamports / 1e9).toStringAsFixed(4)} SOL'),
+                        Text(
+                            'Last Key: ${_lastHashKey.isEmpty ? "None" : _lastHashKey}'),
+                        Text(
+                            'Balance: ${(_mappingBalanceLamports).toStringAsFixed(4)} SOL'),
                       ],
                     ),
                   ),
                 ),
-
                 SizedBox(height: 20),
-
                 TextField(
                   controller: _amountController,
                   decoration: InputDecoration(
@@ -434,29 +431,37 @@ class _MyHomePageState extends State<MyHomePage> {
                   ),
                   keyboardType: TextInputType.number,
                 ),
-
                 SizedBox(height: 20),
-
-                ElevatedButton(
-                  onPressed: () {
-                    final amountSol = double.tryParse(_amountController.text) ?? 0;
-                    if (amountSol > 0) {
-                      deposit(amountSol);
-                    }
-                  },
-                  child: Text('Deposit (Create Mapping Entry)'),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    ElevatedButton(
+                      onPressed: () async {
+                        final d = await isPoolInitialized();
+                        if (!d) {
+                          await initializePool();
+                        }
+                      },
+                      child: Text('Init'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () async {
+                        final amountSol =
+                            double.tryParse(_amountController.text) ?? 0;
+                        if (amountSol > 0) {
+                          deposit(amountSol);
+                        }
+                      },
+                      child: Text('Deposit (Create Mapping Entry)'),
+                    ),
+                  ],
                 ),
-
                 SizedBox(height: 30),
-
                 Divider(),
-
                 SizedBox(height: 10),
-
-                Text('Withdraw Section', style: Theme.of(context).textTheme.titleLarge),
-
+                Text('Withdraw Section',
+                    style: Theme.of(context).textTheme.titleLarge),
                 SizedBox(height: 10),
-
                 TextField(
                   controller: _withdrawHashController,
                   decoration: InputDecoration(
@@ -464,9 +469,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     border: OutlineInputBorder(),
                   ),
                 ),
-
                 SizedBox(height: 10),
-
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
@@ -490,12 +493,11 @@ class _MyHomePageState extends State<MyHomePage> {
                     ),
                   ],
                 ),
-
                 SizedBox(height: 20),
-
                 Text(
                   'This Pre-Pre-Pre-Pre-Pre alpha Stage',
-                  style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                      color: Colors.blue, fontWeight: FontWeight.bold),
                   textAlign: TextAlign.center,
                 ),
               ],
